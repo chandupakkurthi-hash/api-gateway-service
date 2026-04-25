@@ -1,5 +1,8 @@
 package com.example.api_gateway_service.ratelimit;
 
+import io.micrometer.core.instrument.Metrics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -7,10 +10,9 @@ import org.springframework.data.redis.core.script.RedisScript;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * Fixed-window rate limiter backed by Redis (atomic via Lua).
- */
 public class RedisFixedWindowRateLimiter {
+
+    private static final Logger log = LoggerFactory.getLogger(RedisFixedWindowRateLimiter.class);
 
     private static final String LUA = """
             local current = redis.call('INCR', KEYS[1])
@@ -59,6 +61,13 @@ public class RedisFixedWindowRateLimiter {
         boolean allowed = count <= maxRequests;
         int remaining = (int) Math.max(0, maxRequests - count);
         long retryAfterSeconds = allowed ? 0 : Math.max(1, resetEpochSeconds - nowEpochSeconds);
+
+        if (!allowed) {
+            log.warn("Rate limit reached for key: {}. Count: {}, Max: {}", clientKey, count, maxRequests);
+            Metrics.counter("ratelimiter.rejected", "key", clientKey).increment();
+        } else {
+            Metrics.counter("ratelimiter.allowed", "key", clientKey).increment();
+        }
 
         return new Result(allowed, remaining, maxRequests, resetEpochSeconds, retryAfterSeconds);
     }

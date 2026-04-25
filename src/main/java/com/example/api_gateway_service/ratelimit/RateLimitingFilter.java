@@ -55,7 +55,6 @@ public class RateLimitingFilter extends OncePerRequestFilter {
                 return false;
         }
 
-        // Do not rate-limit UI pages/static assets/OAuth callback endpoints by default.
         return true;
     }
 
@@ -73,7 +72,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             result = limiter.tryAcquire(key);
         } catch (Exception e) {
             backend = "redis-error";
-            log.error("Redis rate limiter failed; blocking request. error={}", e.toString());
+            log.error("Redis rate limiter failed code=503 error={}", e.toString());
             response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("{\"error\":\"rate_limiter_unavailable\"}");
